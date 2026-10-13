@@ -1,0 +1,31 @@
+{
+  "name": "global-manage",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt generate",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "npx serve .output/public -s -l 3000",
+    "postinstall": "nuxt prepare",
+    "deploy": "nuxt generate && firebase deploy --only hosting",
+    "deploy:all": "nuxt generate && firebase deploy"
+  },
+  "dependencies": {
+    "@tiptap/extension-image": "^2.27.2",
+    "@tiptap/extension-link": "^2.27.2",
+    "@tiptap/extension-placeholder": "^2.27.2",
+    "@tiptap/starter-kit": "^2.27.2",
+    "@tiptap/vue-3": "^2.27.2",
+    "firebase": "^10.12.0",
+    "nuxt": "3.13.2",
+    "vue": "^3.5.0",
+    "vue-router": "^4.4.0"
+  },
+  "devDependencies": {
+    "@nuxtjs/tailwindcss": "^6.12.0",
+    "@tailwindcss/typography": "^0.5.20",
+    "serve": "^14.2.6",
+    "tailwindcss": "^3.4.0"
+  }
+}

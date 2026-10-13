@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Users - 自分のプロファイルは作成・更新可、削除は管理者のみ
+    match /users/{userId} {
+      allow read, create, update: if request.auth != null &&
+        (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // 有給申請 - 自分の申請は読み書き可（承認待ちの間は編集・取消可）、管理者は全件操作可
+    match /paidLeave/{docId} {
+      allow read: if request.auth != null &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin() ||
+        (request.auth != null && resource.data.userId == request.auth.uid && resource.data.status == 'pending');
+    }
+
+    // 経費申請 - 同上
+    match /expenses/{docId} {
+      allow read: if request.auth != null &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin() ||
+        (request.auth != null && resource.data.userId == request.auth.uid && resource.data.status == 'pending');
+    }
+
+    // 残業申請 - 同上
+    match /overtime/{docId} {
+      allow read: if request.auth != null &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin() ||
+        (request.auth != null && resource.data.userId == request.auth.uid && resource.data.status == 'pending');
+    }
+
+    // 車両 - 全員読み取り可、更新は認証済みユーザー、追加・削除は管理者のみ
+    match /vehicles/{docId} {
+      allow read: if request.auth != null;
+      allow update: if request.auth != null;
+      allow create, delete: if isAdmin();
+    }
+
+    // 請求 - 管理者のみ
+    match /billing/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 通知 - 自分宛、または管理者宛（targetRole）の通知は読み取り・更新可（既読マーク）
+    // 作成は認証済みユーザーなら誰でも可（申請時に管理者へ、承認/却下時に本人へ通知するため）
+    match /notifications/{docId} {
+      allow read, update: if request.auth != null &&
+        (resource.data.userId == request.auth.uid ||
+          (resource.data.targetRole == 'admin' && isAdmin()));
+      allow create: if request.auth != null;
+    }
+
+    // お知らせ - 全員読み取り可（表示範囲の絞り込みはクライアント側）、作成・更新・削除は管理者のみ
+    match /announcements/{docId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // お知らせ既読記録 - 本人分のみ読み書き可
+    match /announcementReads/{docId} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+    }
+
+    // 健康診断イベント - 全員読み取り可、作成・更新・削除は管理者のみ
+    match /healthCheckupEvents/{docId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 健康診断 回答（予約日・受診日・結果） - 本人または管理者のみ読み書き可
+    match /healthCheckupResponses/{docId} {
+      allow read: if request.auth != null &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // 社用カード経費申請（CSVインポート） - 認証済みユーザーなら誰でも閲覧・操作可
+    match /cardExpenses/{docId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>管理者セットアップ</title>
+  <style>
+    body { font-family: sans-serif; max-width: 680px; margin: 40px auto; padding: 20px; background: #f9fafb; }
+    .card { background: white; border-radius: 12px; border: 1px solid #e5e7eb; padding: 24px; margin-bottom: 20px; }
+    h1 { font-size: 20px; margin: 0 0 6px; }
+    h2 { font-size: 15px; margin: 0 0 16px; color: #374151; }
+    p.sub { font-size: 13px; color: #6b7280; margin: 0 0 20px; }
+    button { padding: 10px 20px; background: #1d4ed8; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-top: 10px; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    input, select { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box; margin-top: 4px; }
+    label { font-size: 13px; color: #374151; font-weight: 600; display: block; margin-top: 12px; }
+    .log { background: #f3f4f6; border-radius: 8px; padding: 16px; margin-top: 16px; font-family: monospace; font-size: 13px; line-height: 1.8; min-height: 60px; white-space: pre-wrap; }
+    .ok { color: #16a34a; } .err { color: #dc2626; } .info { color: #2563eb; }
+    .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #dbeafe; color: #1d4ed8; font-weight: 600; margin-left: 8px; }
+  </style>
+</head>
+<body>
+  <h1>🔧 GlobalManage セットアップ</h1>
+  <p class="sub">ログインしてFirestoreにデータを書き込みます</p>
+
+  <!-- STEP 1: Admin setup -->
+  <div class="card">
+    <h2>① 管理者セットアップ <span class="badge">nishijima@llc-addition.com</span></h2>
+    <label>パスワード</label>
+    <input id="pw1" type="password" placeholder="nishijima のパスワード" />
+    <button onclick="runAdmin()">管理者 + 車両データを設定</button>
+    <div class="log" id="log1">待機中...</div>
+  </div>
+
+  <!-- STEP 2: User profile setup -->
+  <div class="card">
+    <h2>② ユーザープロフィール設定 <span class="badge">alljapanekiden@gmail.com</span></h2>
+    <label>パスワード</label>
+    <input id="pw2" type="password" placeholder="alljapanekiden のパスワード" />
+    <label>スタッフ名（staffName）</label>
+    <input id="staffName2" value="西島" />
+    <label>表示名（name）</label>
+    <input id="name2" value="西島" />
+    <button onclick="runUser()">プロフィールを設定</button>
+    <div class="log" id="log2">待機中...</div>
+  </div>
+
+<script>
+const API_KEY = 'AIzaSyAjczSlMbbtUk4-fqNwFCglTAr8DHHSseA'
+const PROJECT_ID = 'globalmanage-e324b'
+const FIRESTORE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`
+const AUTH = 'https://identitytoolkit.googleapis.com/v1'
+
+const vehicles = [
+  { id: 'v1', staffName: '田中 美咲', vehicleName: 'プリウス（白）', plate: '横浜300あ1234', inspectionExpiry: '2026-06-15', lastOilChangeDate: '2025-11-15', lastOilChangeMileage: 42000, currentMileage: 47800, oilChangeIntervalKm: 5000, oilChangeIntervalMonths: 6 },
+  { id: 'v2', staffName: '佐藤 健太', vehicleName: 'ノア（シルバー）', plate: '横浜500い5678', inspectionExpiry: '2027-03-15', lastOilChangeDate: '2026-01-20', lastOilChangeMileage: 30000, currentMileage: 33200, oilChangeIntervalKm: 5000, oilChangeIntervalMonths: 6 },
+  { id: 'v3', staffName: '鈴木 由香', vehicleName: 'フィット（青）', plate: '横浜100う9012', inspectionExpiry: '2026-05-30', lastOilChangeDate: '2025-10-05', lastOilChangeMileage: 58000, currentMileage: 63800, oilChangeIntervalKm: 5000, oilChangeIntervalMonths: 6 },
+  { id: 'v4', staffName: '高橋 誠', vehicleName: 'アクア（赤）', plate: '横浜400え3456', inspectionExpiry: '2027-01-28', lastOilChangeDate: '2026-03-10', lastOilChangeMileage: 25000, currentMileage: 26800, oilChangeIntervalKm: 5000, oilChangeIntervalMonths: 6 },
+  { id: 'v5', staffName: '西島', vehicleName: 'ヴィッツ（白）', plate: '横浜200お7890', inspectionExpiry: '2026-09-05', lastOilChangeDate: '2026-02-14', lastOilChangeMileage: 71000, currentMileage: 74600, oilChangeIntervalKm: 5000, oilChangeIntervalMonths: 6 },
+]
+
+async function post(url, body) {
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const data = await res.json()
+  if (!res.ok) throw new Error(JSON.stringify(data.error ?? data))
+  return data
+}
+
+async function firestoreWrite(col, docId, fields, idToken) {
+  const mask = Object.keys(fields).map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&')
+  const res = await fetch(`${FIRESTORE}/${col}/${docId}?${mask}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ fields }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(JSON.stringify(data.error ?? data))
+  return data
+}
+
+function toFsFields(obj) {
+  const toVal = v => typeof v === 'string' ? { stringValue: v } : Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v }
+  return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, toVal(v)]))
+}
+
+async function signIn(email, password, logEl) {
+  log(logEl, `ログイン中 (${email})...`, 'info')
+  const res = await post(`${AUTH}/accounts:signInWithPassword?key=${API_KEY}`, { email, password, returnSecureToken: true })
+  log(logEl, `✓ ログイン成功 (UID: ${res.localId})`, 'ok')
+  return res
+}
+
+function log(el, msg, cls = '') {
+  if (el.textContent === '待機中...') el.textContent = ''
+  const span = document.createElement('span')
+  span.className = cls
+  span.textContent = msg + '\n'
+  el.appendChild(span)
+  el.scrollTop = el.scrollHeight
+}
+
+async function runAdmin() {
+  const logEl = document.getElementById('log1')
+  logEl.innerHTML = ''
+  const pw = document.getElementById('pw1').value
+  if (!pw) { log(logEl, '❌ パスワードを入力してください', 'err'); return }
+  const btn = event.target; btn.disabled = true
+  try {
+    const { idToken, localId } = await signIn('nishijima@llc-addition.com', pw, logEl)
+
+    log(logEl, '管理者プロフィールを書き込み中...', 'info')
+    await firestoreWrite('users', localId, toFsFields({ name: '西島', staffName: '西島', role: 'admin', email: 'nishijima@llc-addition.com' }), idToken)
+    log(logEl, '✓ 管理者プロフィール保存完了', 'ok')
+
+    log(logEl, '車両データを書き込み中...', 'info')
+    for (const v of vehicles) {
+      const { id, ...fields } = v
+      await firestoreWrite('vehicles', id, toFsFields(fields), idToken)
+      log(logEl, `✓ ${v.staffName} → ${v.vehicleName}`, 'ok')
+    }
+    log(logEl, '\n✅ 完了！ログアウトして再ログインしてください。', 'ok')
+  } catch (e) {
+    log(logEl, `❌ エラー: ${e.message}`, 'err')
+  } finally { btn.disabled = false }
+}
+
+async function runUser() {
+  const logEl = document.getElementById('log2')
+  logEl.innerHTML = ''
+  const pw = document.getElementById('pw2').value
+  const staffName = document.getElementById('staffName2').value.trim()
+  const name = document.getElementById('name2').value.trim()
+  if (!pw) { log(logEl, '❌ パスワードを入力してください', 'err'); return }
+  const btn = event.target; btn.disabled = true
+  try {
+    const { idToken, localId } = await signIn('alljapanekiden@gmail.com', pw, logEl)
+    log(logEl, 'プロフィールを書き込み中...', 'info')
+    await firestoreWrite('users', localId, toFsFields({ name, staffName, role: 'user', email: 'alljapanekiden@gmail.com' }), idToken)
+    log(logEl, `✓ staffName: ${staffName} / name: ${name} / role: user`, 'ok')
+    log(logEl, '\n✅ 完了！ログアウトして再ログインしてください。', 'ok')
+  } catch (e) {
+    log(logEl, `❌ エラー: ${e.message}`, 'err')
+  } finally { btn.disabled = false }
+}
+</script>
+</body>
+</html>
